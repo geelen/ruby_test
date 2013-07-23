@@ -1,7 +1,7 @@
-'use strict';
+(function(app) {
+  'use strict';
 
-angular.module('rubyTestApp', [])
-  .config(function ($routeProvider) {
+  app.config(function($routeProvider) {
     $routeProvider
       .when('/', {
         templateUrl: 'views/main.html',
@@ -11,3 +11,15 @@ angular.module('rubyTestApp', [])
         redirectTo: '/'
       });
   });
+
+  app.directive('datCanvas', function() {
+    return function(scope, element, attrs) {
+      var canvas = element[0],
+        context = canvas.getContext("2d");
+
+      console.log(canvas, context)
+    }
+  })
+
+
+})(angular.module('rubyTestApp', []));

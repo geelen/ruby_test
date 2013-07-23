@@ -31,13 +31,14 @@ dev.start_video()
 # dev.depth_mode = Freenect.depth_mode(:medium, :depth_11bit)
 # dev.start_depth()
 
+dir = ARGV[0] || "."
 
 $snapshot_finished = nil
 
 STDERR.puts "Attempting snapshot"
 dev.set_video_callback do |device, video, timestamp|
   if not $snapshot_finished
-    fname = "%i.ppm" % timestamp
+    fname = "#{dir}/%i.ppm" % timestamp
     STDERR.puts "Writing #{fname}"
     File.open(fname, "w") do |f|
       f.puts("P6 %d %d 255\n" % [ dev.video_mode.width, dev.video_mode.height ] )

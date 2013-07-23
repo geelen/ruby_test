@@ -7,4 +7,6 @@ angular.module('rubyTestApp')
       'AngularJS',
       'Karma'
     ];
+
+
   });
