@@ -17,7 +17,14 @@
       var canvas = element[0],
         context = canvas.getContext("2d");
 
-      console.log(canvas, context)
+      window.ws = new WebSocket("ws://localhost:9001");
+      ws.onopen = function() {
+        ws.onmessage = function(e) {
+          console.log("GOT: " + e.data);
+        };
+
+        ws.send("GIMME PPM " + attrs.datCanvas);
+      }
     }
   })
 
