@@ -7,6 +7,8 @@
 #
 # The example below shows how to capture a single video frame to a PPM file.
 
+require 'pry'
+
 $: << File.expand_path(File.join(File.dirname(__FILE__), "ffi-libfreenect"))
 require 'freenect'
 ctx = Freenect.init()
@@ -34,10 +36,12 @@ dev.start_video()
 dir = ARGV[0] || "."
 
 $snapshot_finished = nil
+dat_video = nil
 
 STDERR.puts "Attempting snapshot"
 dev.set_video_callback do |device, video, timestamp|
   if not $snapshot_finished
+    dat_video = video
     fname = "#{dir}/%i.ppm" % timestamp
     STDERR.puts "Writing #{fname}"
     File.open(fname, "w") do |f|
@@ -52,6 +56,7 @@ ret = -1
 until $snapshot_finished
   break if (ret=ctx.process_events) < 0
 end
+binding.pry 
 
 if ret < 0
   STDERR.puts "Error: unable to take snapshot. process_events code=#{ret}"
