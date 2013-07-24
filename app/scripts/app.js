@@ -20,22 +20,22 @@
 
       window.ws = new WebSocket("ws://localhost:9001");
       ws.onopen = function() {
-        var frame = {};
         var playback = false;
+
+        console.timeStamp("Socket open and ready!");
 
         ws.onmessage = function(e) {
           window.e = e;
           if (typeof e.data == "string") {
-            console.log(e.data)
             var json = JSON.parse(e.data);
-            console.log(json);
-          } else {
-            console.log(e);
+            console.log(json)
+            console.timeStamp("Json response");
 
+          } else {
             window.reader = new FileReader();
             reader.addEventListener("loadend", function() {
+              console.timeStamp("Loaded");
                // reader.result contains the contents of blob as a typed array
-              console.log("read!")
               window.array = new Uint8Array(reader.result);
               window.imgData = context.getImageData(0, 0, 640, 480);
               console.log(array.length)
@@ -44,10 +44,13 @@
                 imgData.data[Math.floor(i / 3) * 4 + (i % 3)] = array[i];
                 imgData.data[Math.floor(i / 3) * 4 + 3] = 255;
               }
+              console.timeStamp("Image data putting");
               context.putImageData(imgData, 0, 0)
+              console.timeStamp("Image data put");
 
               if (playback) ws.send("GIMME IMAGE");
             });
+            console.timeStamp("Reading data");
             reader.readAsArrayBuffer(e.data);
 
           }
