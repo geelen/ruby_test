@@ -20,10 +20,22 @@ STDERR.puts "Selecting device 0"
 dev = ctx.open_device(0)
 
 dev.led = :green # play with the led
-waiting_for_events = false
+$waiting_for_events = false
+$ready_to_receive = false
 
 port = 9001
 EM.run {
+  wait_for_usb = -> {
+    print "^"
+    ret = ctx.process_events
+
+    if ret < 0
+      STDERR.puts "Error: unable to take snapshot. process_events code=#{ret}"
+    end
+
+    EM.next_tick(&wait_for_usb) if $waiting_for_events
+  }
+
   puts "Listening on #{port}"
   EM::WebSocket.run(:host => "0.0.0.0", :port => port) do |ws|
     ws.onopen { |handshake|
@@ -40,7 +52,7 @@ EM.run {
       puts "Connection closed"
       dev.led = :green
       dev.stop_video
-      waiting_for_events = false
+      $waiting_for_events = false
     }
 
     ws.onmessage { |msg|
@@ -89,27 +101,21 @@ EM.run {
         dev.video_mode = Freenect.video_mode(:medium, :rgb)
         dev.start_video()
         dev.set_video_callback do |device, video, timestamp|
-          STDERR.puts "SENT!"
-          EM.next_tick do
+          if $ready_to_receive
+            STDERR.puts "SENT!"
             ws.send_binary(video.read_string_length(dev.video_mode.bytes))
+            $ready_to_receive = false
+          else
+            STDERR.print "v"
           end
         end
-        waiting_for_events = true
+        $ready_to_receive = true
+        $waiting_for_events = true
+        EM.next_tick(&wait_for_usb)
+      when /MOAR PLOX/
+        $ready_to_receive = true
       end
     }
-  end
-
-  timer = EventMachine::PeriodicTimer.new(0.1) do
-    if waiting_for_events
-      print "^"
-      ret = ctx.process_events
-
-      if ret < 0
-        STDERR.puts "Error: unable to take snapshot. process_events code=#{ret}"
-      end
-    else
-      print "-"
-    end
   end
 }
 
