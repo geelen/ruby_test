@@ -20,7 +20,7 @@ STDERR.puts "Selecting device 0"
 dev = ctx.open_device(0)
 
 dev.led = :green # play with the led
-
+waiting_for_events = false
 
 port = 9001
 EM.run {
@@ -36,13 +36,19 @@ EM.run {
       ws.send({hi: "Hello Client, you connected to #{handshake.path}"}.to_json)
     }
 
-    ws.onclose { puts "Connection closed" }
+    ws.onclose {
+      puts "Connection closed"
+      dev.led = :green
+      dev.stop_video
+      waiting_for_events = false
+    }
 
     ws.onmessage { |msg|
       STDERR.puts "Recieved message: #{msg}"
       ws.send({Pong: "#{msg}"}.to_json)
 
-      if msg =~ /GIMME IMAGE/
+      case msg
+      when /GIMME IMAGE/
         STDERR.puts "GETTING AN IMAGE"
 
         dev.led = :red # play with the led
@@ -54,11 +60,11 @@ EM.run {
         dev.set_video_callback do |device, video, timestamp|
           if !snapshot_finished
             ws.send({
-              image: {
-                width: dev.video_mode.width,
-                height: dev.video_mode.height
-              }
-            }.to_json)
+                      image: {
+                        width: dev.video_mode.width,
+                        height: dev.video_mode.height
+                      }
+                    }.to_json)
             ws.send_binary(video.read_string_length(dev.video_mode.bytes))
             snapshot_finished = true
           end
@@ -75,9 +81,35 @@ EM.run {
 
         dev.led = :green
         dev.stop_video
+      when /IMAGES RWAR/
+        STDERR.puts "FIRE IT UP!"
 
+        dev.led = :red # play with the led
+
+        dev.video_mode = Freenect.video_mode(:medium, :rgb)
+        dev.start_video()
+        dev.set_video_callback do |device, video, timestamp|
+          STDERR.puts "SENT!"
+          EM.next_tick do
+            ws.send_binary(video.read_string_length(dev.video_mode.bytes))
+          end
+        end
+        waiting_for_events = true
       end
     }
+  end
+
+  timer = EventMachine::PeriodicTimer.new(0.1) do
+    if waiting_for_events
+      print "^"
+      ret = ctx.process_events
+
+      if ret < 0
+        STDERR.puts "Error: unable to take snapshot. process_events code=#{ret}"
+      end
+    else
+      print "-"
+    end
   end
 }
 

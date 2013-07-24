@@ -24,6 +24,7 @@ end
 STDERR.puts "Selecting device 0"
 dev = ctx.open_device(0)
 
+binding.pry
 dev.led = :green   # play with the led
 
 dev.video_mode = Freenect.video_mode(:medium, :rgb)
@@ -52,11 +53,11 @@ dev.set_video_callback do |device, video, timestamp|
   end
 end
 
+binding.pry
 ret = -1
 until $snapshot_finished
   break if (ret=ctx.process_events) < 0
 end
-binding.pry 
 
 if ret < 0
   STDERR.puts "Error: unable to take snapshot. process_events code=#{ret}"
