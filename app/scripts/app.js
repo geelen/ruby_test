@@ -21,6 +21,7 @@
       window.ws = new WebSocket("ws://localhost:9001");
       ws.onopen = function() {
         var frame = {};
+        var playback = false;
 
         ws.onmessage = function(e) {
           window.e = e;
@@ -36,14 +37,26 @@
                // reader.result contains the contents of blob as a typed array
               console.log("read!")
               window.array = new Uint8Array(reader.result);
+              window.imgData = context.getImageData(0, 0, 640, 480);
               console.log(array.length)
+              var accum = 0;
+              for (var i = 0, l = array.length; i < l; i++) {
+                imgData.data[Math.floor(i / 3) * 4 + (i % 3)] = array[i];
+                imgData.data[Math.floor(i / 3) * 4 + 3] = 255;
+              }
+              context.putImageData(imgData, 0, 0)
+
+              if (playback) ws.send("GIMME IMAGE");
             });
             reader.readAsArrayBuffer(e.data);
 
           }
         };
 
-        ws.send("GIMME IMAGE");
+        scope.togglePlayback = function() {
+          playback = !playback;
+          if (playback) ws.send("GIMME IMAGE");
+        }
       }
     }
   })
