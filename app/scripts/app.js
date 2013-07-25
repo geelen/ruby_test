@@ -12,78 +12,45 @@
       });
   });
 
-  app.directive('datCanvas', function() {
-    return function(scope, element, attrs) {
-      var canvas = element[0],
-        context = canvas.getContext("2d");
-      window.context = context;
-
-      var playback = false;
-      var ws = undefined;
-
-      var startPlayback = function(type) {
-        ws = new WebSocket("ws://localhost:9001");
-        ws.onopen = function() {
+  app.factory('KinectServer', function() {
+    return {
+      jsonCallbacks: [function(json) {
+        console.log(json)
+      }],
+      dataCallbacks: [],
+      init: function() {
+        var self = this;
+        self.ws = new WebSocket("ws://localhost:9002");
+        self.ws.onopen = function() {
           console.log("Socket open and ready!");
 
-          ws.onmessage = function(e) {
+          self.ws.onmessage = function(e) {
             window.e = e;
             if (typeof e.data == "string") {
               var json = JSON.parse(e.data);
-              console.log(json)
-
-            } else {
-              window.reader = new FileReader();
-              reader.addEventListener("loadend", function() {
-                console.log("Loaded");
-                // reader.result contains the contents of blob as a typed array
-                window.array = new Uint8Array(reader.result);
-                window.imgData = context.getImageData(0, 0, 640, 480);
-                console.log(array.length)
-                if (type === 'video') {
-                  for (var i = 0, l = array.length; i < l; i++) {
-                    imgData.data[Math.floor(i / 3) * 4 + (i % 3)] = array[i];
-                    imgData.data[Math.floor(i / 3) * 4 + 3] = 255;
-                  }
-                } else {
-                  var max = 0, min = Math.pow(2, 16), accum = 0;
-                  for (var i = 0, l = array.length; i < l; i += 2) {
-                    var depthIn11Bit = array[i + 1] * Math.pow(2, 8) + array[i];
-                    if (depthIn11Bit > max) max = depthIn11Bit;
-                    if (depthIn11Bit < min) min = depthIn11Bit;
-                    accum += depthIn11Bit;
-                    var depthIn8Bit = 255 - Math.max(0, Math.min(255, depthIn11Bit / 8));
-                    imgData.data[i * 4 + 0] = depthIn8Bit;
-                    imgData.data[i * 4 + 1] = depthIn8Bit;
-                    imgData.data[i * 4 + 2] = depthIn8Bit;
-                    imgData.data[i * 4 + 3] = 255;
-                  }
-                  console.log(max, min, accum / array.length)
-                }
-                context.putImageData(imgData, 0, 0)
-                if (playback) ws.send("MOAR PLOX");
+              angular.forEach(self.jsonCallbacks, function(f) {
+                f(json);
               });
-              reader.readAsArrayBuffer(e.data);
+            } else {
+              angular.forEach(self.dataCallbacks, function(f) {
+                f(e.data);
+              });
             }
           };
-          ws.send(type === 'video' ? "IMAGES RWAR" : "DAT DEPTH")
+          self.moarData();
         };
-      };
-
-      scope.togglePlayback = function(type) {
-        playback = !playback;
-        if (playback) startPlayback(type);
+      },
+      moarData: function() {
+        this.ws.send("MOAR PLOX");
       }
     }
   });
-  app.directive('threejsCanvas', function() {
+
+  app.directive('threejsCanvas', function(KinectServer) {
     return function(scope, element, attrs) {
-
-
       if (!Detector.webgl) Detector.addGetWebGLMessage();
 
       var container, stats;
-      var camera, scene, renderer, parameters, i, h, color;
       var mouseX = 0, mouseY = 0;
 
       var windowHalfX = window.innerWidth / 2;
@@ -93,57 +60,65 @@
       animate();
 
       function init() {
+        KinectServer.init();
 
-        container = document.createElement('div');
-        document.body.appendChild(container);
+        container = element[0];
 
-        camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000);
-        camera.position.z = 200;
+        window.camera = new THREE.PerspectiveCamera(75, window.innerWidth / window.innerHeight, 1, 3000);
+        camera.position.z = 600;
 
-        scene = new THREE.Scene();
-//        scene.fog = new THREE.FogExp2(0x000000, 0.0007);
+        window.scene = new THREE.Scene();
+        //        scene.fog = new THREE.FogExp2(0x000000, 0.0007);
 
-        parameters = [
-          [
-            [1, 1, 0.5],
-            5
-          ]
-        ];
+        var size = 1.0;
 
-        for (i = 0; i < parameters.length; i++) {
+        var material = new THREE.ParticleBasicMaterial({ size: size, vertexColors: true });
+        //        material.color.setHSL(0, 50, 50);
+        var geometry = new THREE.Geometry();
 
-          var color = parameters[i][0];
-          var size = parameters[i][1];
-
-          var material = new THREE.ParticleBasicMaterial({ size: size });
-          material.color.setHSL( color[0], color[1], color[2] );
-
-          var geometry = new THREE.Geometry();
-
-          for (i = 0; i < 200; i++) {
-
-            var vertex = new THREE.Vector3();
-            vertex.x = Math.random() * 100 - 50;
-            vertex.y = Math.random() * 100 - 50;
-            vertex.z = Math.random() * 100;
-
-            geometry.vertices.push(vertex);
-
-          }
-
-          var particles = new THREE.ParticleSystem(geometry, material);
-
-          particles.rotation.x = Math.random() * 6;
-          particles.rotation.y = Math.random() * 6;
-          particles.rotation.z = Math.random() * 6;
-
-          scene.add(particles);
-
+        for (var i = 0; i < 640 * 480; i++) {
+          geometry.vertices.push(new THREE.Vector3());
+          geometry.colors.push(new THREE.Color("#ffffff"));
         }
 
-        renderer = new THREE.WebGLRenderer();
+        KinectServer.dataCallbacks.push(function(data) {
+          console.log("data!")
+
+          window.reader = new FileReader();
+          reader.addEventListener("loadend", function() {
+            console.log("Loaded");
+            // reader.result contains the contents of blob as a typed array
+            window.array = new Uint8Array(reader.result);
+            for (var i = 0, l = array.length; i < l; i += 2) {
+              var depthIn11Bit = array[i + 1] * Math.pow(2, 8) + array[i];
+              var pixelIndex = Math.floor(i / 2);
+              var vector = geometry.vertices[pixelIndex];
+              vector.x = Math.floor(pixelIndex % 640) - 320;
+              vector.y = 240 - Math.floor(pixelIndex / 640);
+              if (depthIn11Bit === Math.pow(2, 11) - 1) {
+                vector.z = Infinity;
+              } else {
+                vector.z = (Math.pow(2, 10) - depthIn11Bit);
+              }
+              geometry.colors[pixelIndex].setHSL(0, 1, 1 - depthIn11Bit / Math.pow(2, 11));
+            }
+            window.geometry = geometry;
+            geometry.verticesNeedUpdate = true;
+            geometry.colorsNeedUpdate = true;
+          });
+          reader.readAsArrayBuffer(data);
+          KinectServer.moarData();
+        });
+
+        var particles = new THREE.ParticleSystem(geometry, material);
+        scene.add(particles);
+
+        window.renderer = new THREE.WebGLRenderer();
         renderer.setSize(window.innerWidth, window.innerHeight);
         container.appendChild(renderer.domElement);
+
+        var effect = new THREE.OculusRiftEffect( renderer, {worldScale: 100} );
+        effect.setSize( window.innerWidth, window.innerHeight );
 
         stats = new Stats();
         stats.domElement.style.position = 'absolute';
@@ -153,8 +128,6 @@
         document.addEventListener('mousemove', onDocumentMouseMove, false);
         document.addEventListener('touchstart', onDocumentTouchStart, false);
         document.addEventListener('touchmove', onDocumentTouchMove, false);
-
-        //
 
         window.addEventListener('resize', onWindowResize, false);
       }
@@ -196,11 +169,23 @@
       }
 
       function render() {
-        camera.position.x += ( mouseX - camera.position.x ) * 0.05;
-        camera.position.y += ( -mouseY - camera.position.y ) * 0.05;
-        camera.lookAt(scene.position);
-        renderer.render(scene, camera);
+        var time = Date.now() * 0.0001;
+                camera.position.x += ( mouseX - camera.position.x ) * 0.05;
+                camera.position.y += ( -mouseY - camera.position.y ) * 0.05;
+                camera.lookAt(scene.position);
+
+//
+//        for (var i = 0; i < scene.children.length; i++) {
+//          var object = scene.children[ i ];
+//          if (object instanceof THREE.ParticleSystem) {
+//            object.rotation.y = time * ( i < 4 ? i + 1 : -( i + 1 ) );
+//          }
+//        }
+
+//        renderer.render(scene, camera);
+        effect.render( scene, camera );
       }
+
     }
   });
 
