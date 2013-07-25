@@ -60,7 +60,7 @@ EM.run {
       ws.send({Pong: "#{msg}"}.to_json)
 
       case msg
-      when /GIMME IMAGE/
+      when "GIMME IMAGE"
         STDERR.puts "GETTING AN IMAGE"
 
         dev.led = :red # play with the led
@@ -93,7 +93,7 @@ EM.run {
 
         dev.led = :green
         dev.stop_video
-      when /IMAGES RWAR/
+      when "IMAGES RWAR"
         STDERR.puts "FIRE IT UP!"
 
         dev.led = :red # play with the led
@@ -112,8 +112,31 @@ EM.run {
         $ready_to_receive = true
         $waiting_for_events = true
         EM.next_tick(&wait_for_usb)
-      when /MOAR PLOX/
+      when "MOAR PLOX"
         $ready_to_receive = true
+      when "NOOOPE"
+        dev.led = :green
+        dev.stop_video
+        $waiting_for_events = false
+      when "DAT DEPTH"
+        dev.led = :yellow # play with the led
+
+        dev.depth_mode = Freenect.depth_mode(:medium, :depth_11bit)
+        dev.start_depth()
+        dev.set_depth_callback do |device, depth, timestamp|
+          if $ready_to_receive
+            STDERR.puts "SENT!"
+            ws.send_binary(depth.read_string_length(dev.depth_mode.bytes))
+            $ready_to_receive = false
+          else
+            STDERR.print "v"
+          end
+        end
+        $ready_to_receive = true
+        $waiting_for_events = true
+        EM.next_tick(&wait_for_usb)
+
+
       end
     }
   end
